@@ -322,62 +322,86 @@ take_off:
 	sw	$t1, PLANETS_REQUEST
 	add	$t0, $t1, $t0		# $t0 = start of destination planet info
 
-	lw	$t2, BOT_X         #get x position
-	beq	$t2, 150, align_y  # 
-	bgt	$t2, 150, target_left
+	lw $t2 planet_x($t0)# get planet x coordinate
+	lw $t3 planet_y($t0)#get planet y coordinate
+	lw $t4 orbital_radius($t0)
+	li $t5 150
+
+	################################################select position to move
+
+	blt $t2 150 leftQuad #if planetx is less than 150 planet in left quad
+	j rightQuad
+
+	leftQuad:
+	blt $t3 150 point1 #y<=150
+
+	point4:
+	sub $a0 $t5 $t4 #x=150-radius
+	li $a1 150#y=150
+	j moveToPlanet
+
+	point1:
+	li $a0 150 # x=150
+	sub $a1 $t5 $t4 # y=105-radius
+	j moveToPlanet
 	
-	li	$t3, 0
-	j	move_x
+	rightQuad:
+	blt $t3 150 point2
 
-target_left:
-	li	$t3, 180
+	point3:
+	li $a0 150 #x=150
+	add $a1 $t5 $t4 #y=150+radius
+	j moveToPlanet
 
-move_x:
-	sw	$t3, ANGLE
-	li	$t3, 1
-	sw	$t3, ANGLE_CONTROL
+	point2:
+	add $a0 $t5 $t4 #x=150+radius
+	li $a1 150
 
-move_x_loop:
-	lw	$t2, BOT_X
-	bne	$t2, 150, move_x_loop
 
-align_y:
-	lw	$t2, BOT_Y
-	lw	$t3, orbital_radius($t0)
-	add	$t3, $t3, 150		# $t3 = target Y
-	beq	$t2, $t3, wait_for_planet
-	bgt	$t2, $t3, target_up
-	
-	li	$t4, 90
-	j	move_y
+	moveToPlanet:
+	jal move_sbot
 
-target_up:
-	li	$t4, 270
-
-move_y:
-	sw	$t4, ANGLE
-	li	$t4, 1
-	sw	$t4, ANGLE_CONTROL
-
-move_y_loop:
-	lw	$t2, BOT_Y
-	bne	$t2, $t3, move_y_loop
-
-wait_for_planet:
-	sw	$zero, VELOCITY
-
-wait_for_planet_loop:
-	sw	$t1, PLANETS_REQUEST
-	lw	$t2, planet_x($t0)
-	bne	$t2, 150, wait_for_planet_loop
-	lw	$t2, planet_y($t0)
-	bne	$t2, $t3, wait_for_planet_loop
-
-	# planet is under you; now land on it
-	sw	$zero, LANDING_REQUEST
-
-Landed:
-	# jump back to solving problems
 	j puzzle_loop
 
 	# never reached, but included for completeness
+
+move_sbot:                              # FUNCTION: move_spimbot(target_x, target_y)
+    sw      $ra, TAKEOFF_REQUEST($0)    # Request takeoff (write something to addr)
+    li      $v0, 1                      # Load a constant 1 for absolute angle orientation
+    li      $v1, 10                     # Load a constant 10 for velocity
+
+align_x:                                # ALIGN X-POSITION
+    lw      $t0, BOT_X($0)              # t0 = bot_x
+    beq     $t0, $a0, align_y           # If x already aligned, skip to align_y
+    move    $a2, $0                     # a2 = angle to face, default is right
+    bgt     $a0, $t0, correct_xdir      # If target_x > bot_x, stay facing right
+    add     $a2, $a2, 180               # otherwise face left
+correct_xdir:
+    sw      $a2, ANGLE($0)              # Angle = 0 or 180
+    sw      $v0, ANGLE_CONTROL($0)      # Make spimbot face that angle
+    sw      $v1, VELOCITY($0)           # velocity = 10
+move_x:
+    lw      $t0, BOT_X($0)              # t0 = bot_x
+    bne     $t0, $a0, move_x            # if bot_x =/= target_x, keep moving 
+    sw      $0,  VELOCITY($0)           # else stop moving 
+
+align_y:                                # ALIGN Y-POSITION
+    lw      $t1, BOT_Y($0)              # t1 = bot_y
+    beq     $t1, $a1, landing           # If y already aligned, skip to landing
+    li      $a2, 90                     # Default angle is down
+    bgt     $a1, $t1, correct_ydir      # If target_y > bot_y, stay facing down
+    add     $a2, $a2, 180               # otherwise face up
+correct_ydir:
+    sw      $a2, ANGLE($0)              # Angle = 90 or 270
+    sw      $v0, ANGLE_CONTROL($0)      # Make spimbot face that angle
+    sw      $v1, VELOCITY($0)           # velocity = 10
+move_y:
+    lw      $t1, BOT_Y($0)              # t1 = bot_y
+    bne     $t1, $a1, move_y            # if bot_y =/= target_y, keep moving
+    sw      $0,  VELOCITY($0)           # else stop moving
+
+landing:                                # LANDING
+    sw      $ra, LANDING_REQUEST($0)    # Attempt to land
+    lw      $v0, LANDING_REQUEST($0)    # Did we land?
+    blt     $v0, $0, landing            # If not, try again
+    jr      $ra
