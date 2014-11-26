@@ -61,7 +61,7 @@
 ####################################
 .text
 main:
-    sub     $sp, $sp, 8                 
+    sub     $sp, $sp, 20                 
     sw      $ra, 0($sp)     
     sw      $s0, 4($sp)
     sw      $s1, 8($sp)  
