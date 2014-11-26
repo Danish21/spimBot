@@ -60,21 +60,27 @@
 #            MAIN PROGRAM          #
 ####################################
 .text
-main:
-    sub     $sp, $sp, 20                 
-    sw      $ra, 0($sp)     
-    sw      $s0, 4($sp)
-    sw      $s1, 8($sp)  
-    sw      $s7, 12($sp)                # s7 = global counter of puzzles solved
-    sw      $s6, 16($sp)   
-        
-    lw      $s6, LANDING_REQUEST        # s6 = target planet, initially set to current planet
-    li      $t0, DELIVERY_MASK          # put the delivery mask
-    or      $t0, $t0, TIMER_MASK        # apply the timer mask
-    or      $t0, $t0, 1                 # global interrupt enable
+main:                                   # Apply interrupt masks and global interrupt bit
+    li      $t0, DELIVERY_MASK
+    or      $t0, $t0, TIMER_MASK
+    or      $t0, $t0, 1
     mtc0    $t0, $12                    # set status register
     li      $t0, 999950
     sw      $t0, TIMER                  # request an interrupt 50 cycles before the program ends
+    
+    sub     $sp, $sp, 32                # Allocate stack for saving values
+    sw      $ra, 0($sp)
+    sw      $s0, 4($sp)
+    sw      $s1, 8($sp)
+    sw      $s2, 12($sp)
+    sw      $s2, 16($sp)
+    sw      $s3, 20($sp)    
+    sw      $s6, 24($sp)  
+    sw      $s7, 28($sp)
+    
+    la      $s0, puzzle0
+    la      $s1, puzzle1
+    lw      $s6, LANDING_REQUEST        # s6 = target planet, initially set to current planet
     
 pre_puzzle:                             # set up for puzzles on new planet
     move    $s7, $zero                  # initially have solved zero puzzles
@@ -87,11 +93,11 @@ solve_dispatch:                         # Pipelined puzzle request and puzzle so
     lw      $t1, p1_ready
     
     bne     $t0, $zero, skip_p0_req     # Did we already request p0?
-    sw      $t0, PUZZLE_REQUEST         # if we haven't, request and mark that we did
+    sw      $s0, PUZZLE_REQUEST         # if we haven't, request and mark that we did
     sw      $v0, p0_ready
 skip_p0_req:
     bne     $t1, $zero, skip_p1_req     # Did we already request p1?
-    sw      $t1, PUZZLE_REQUEST         # if we haven't, request and mark that we did
+    sw      $s1, PUZZLE_REQUEST         # if we haven't, request and mark that we did
     sw      $v0, p1_ready
 skip_p1_req:
     lw      $t0, p0_ready               # load the flags for p0 and p1
@@ -101,24 +107,24 @@ skip_p1_req:
     j       skip_p1_req                 # wait until one of the puzzles become ready
     
 pre_solve0:                             # set up for solving puzzle0
-    la      $s0, puzzle0                # s0 = address of puzzle to solve
+    move    $s2, $s0                    # s2 = address of puzzle to be solved
     sw      $zero, p0_ready             # clear appropriate flags
     j       solve_prologue
 pre_solve1:                             # set up for solving puzzle1
-    la      $s0, puzzle1
+    move    $s2, $s1
     sw      $zero, p1_ready
 solve_prologue:
-    move    $s1, $s0                    # save a copy of the address of puzzle head
+    move    $s3, $s2                    # s3 = copy of the address of puzzle head
 solve_loop:
-    lw      $a0, str($s0)               # get the first string
-    lw      $a1, str+4($s0)             # get the second string 
+    lw      $a0, str($s2)               # get the first string
+    lw      $a1, str+4($s2)             # get the second string 
     jal     puzzle_solve                # solve the puzzle
-    sw      $v0, solution($s0)          # store the puzzle
+    sw      $v0, solution($s2)          # store the puzzle
     add     $s7, $s7, 1                 # keeps track of puzzles solve
-    lw      $s0, next($s0)              # go to the next puzzle
-    bne     $s0, 0, solve_loop          # solve until a null pointer
+    lw      $s2, next($s2)              # go to the next puzzle
+    bne     $s2, 0, solve_loop          # solve until a null pointer
 
-    sw      $s1, SOLVE_REQUEST          # Turn in puzzle solutions
+    sw      $s3, SOLVE_REQUEST          # Turn in puzzle solutions
     bgt     $s7, 7, landing             # Go to another planet if solved 7 puzzles on this planet
 
     j       solve_dispatch              # otherwise go solve the next set
