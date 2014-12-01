@@ -170,7 +170,7 @@ point2:
 
 moveToPlanet:
     jal     move_sbot
-    j       pre_puzzle:
+    j       pre_puzzle
 
 
 ####################################
