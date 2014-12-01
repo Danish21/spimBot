@@ -50,11 +50,11 @@
     next = 12
 
 # allocated memory for flags, puzzles, and planet data
+    planets:        .space NUM_PLANETS * planet_info_size
     p0_ready:       .word 0             # flag values: 0 = not requested; 1 = waiting on request
     p1_ready:       .word 0             #              2 = puzzle is ready
-    puzzle0:        .word 8192
-    puzzle1:        .word 8192
-    planets:        .space NUM_PLANETS * planet_info_size
+    puzzle0:        .space 8192
+    puzzle1:        .space 8192
 
 ####################################
 #            MAIN PROGRAM          #
@@ -68,15 +68,15 @@ main:                                   # Apply interrupt masks and global inter
     li      $t0, 999950
     sw      $t0, TIMER                  # request an interrupt 50 cycles before the program ends
     
-    sub     $sp, $sp, 32                # Allocate stack for saving values
-    sw      $ra, 0($sp)
-    sw      $s0, 4($sp)
-    sw      $s1, 8($sp)
-    sw      $s2, 12($sp)
-    sw      $s2, 16($sp)
-    sw      $s3, 20($sp)    
-    sw      $s6, 24($sp)  
-    sw      $s7, 28($sp)
+    #sub     $sp, $sp, 32                # Allocate stack for saving values
+    #sw      $ra, 0($sp)
+    #sw      $s0, 4($sp)
+    #sw      $s1, 8($sp)
+    #sw      $s2, 12($sp)
+    #sw      $s2, 16($sp)
+    #sw      $s3, 20($sp)    
+    #sw      $s6, 24($sp)  
+    #sw      $s7, 28($sp)
     
     la      $s0, puzzle0
     la      $s1, puzzle1
@@ -93,12 +93,12 @@ solve_dispatch:                         # Pipelined puzzle request and puzzle so
     lw      $t1, p1_ready
     
     bne     $t0, $zero, skip_p0_req     # Did we already request p0?
-    sw      $s0, PUZZLE_REQUEST         # if we haven't, request and mark that we did
     sw      $v0, p0_ready
+    sw      $s0, PUZZLE_REQUEST         # if we haven't, request and mark that we did
 skip_p0_req:
     bne     $t1, $zero, skip_p1_req     # Did we already request p1?
-    sw      $s1, PUZZLE_REQUEST         # if we haven't, request and mark that we did
     sw      $v0, p1_ready
+    sw      $s1, PUZZLE_REQUEST         # if we haven't, request and mark that we did
 skip_p1_req:
     lw      $t0, p0_ready               # load the flags for p0 and p1
     lw      $t1, p1_ready
@@ -125,11 +125,11 @@ solve_loop:
     bne     $s2, 0, solve_loop          # solve until a null pointer
 
     sw      $s3, SOLVE_REQUEST          # Turn in puzzle solutions
-    bgt     $s7, 7, landing             # Go to another planet if solved 7 puzzles on this planet
+    bgt     $s7, 3, land                # Go to another planet if solved 7 puzzles on this planet
 
     j       solve_dispatch              # otherwise go solve the next set
 
-landing:
+land:
     add     $s6, $s6, 1
     bne     $s6, 5, take_off            # if target is not 5, go ahead and calculate offset
     move    $s6, $zero                  # otherwise target is planet 0 again
@@ -221,14 +221,15 @@ timer_interrupt:
 delivery_interrupt:
     sw      $zero, DELIVERY_ACKNOWLEDGE
     li      $v0, 2
-    lw      $k0, p1_ready
-    beq     $k0, $zero, not_p1_req
-    sw      $v0, p1_ready
-not_p1_req:
+
     lw      $k0, p0_ready
-    beq     $k0, $zero, not_p0_req
+    bne     $k0, 1, not_p0_req
     sw      $v0, p0_ready
 not_p0_req:
+    lw      $k0, p1_ready
+    bne     $k0, 1, not_p1_req
+    sw      $v0, p1_ready
+not_p1_req:
     j       interrupt_dispatch
 
 non_intrpt:                             # was some non-interrupt
