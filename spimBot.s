@@ -97,7 +97,7 @@ solve_loop:
 	#
 
 	#to go to another planet if solved 7 puzzles on this planet
-	bgt $s7 3 Landing
+	bgt $s7 5 Landing
 	######
 
 	j	puzzle_loop
